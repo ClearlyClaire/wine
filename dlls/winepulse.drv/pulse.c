@@ -41,6 +41,8 @@
 
 #include "wine/debug.h"
 
+#include "devpkey.h"
+
 WINE_DEFAULT_DEBUG_CHANNEL(pulse);
 
 struct pulse_stream
@@ -2326,6 +2328,62 @@ static BOOL get_device_path(PhysDevice *dev, struct get_prop_value_params *param
     return TRUE;
 }
 
+static BOOL get_device_container(PhysDevice *dev, struct get_prop_value_params *params)
+{
+    char buffer[10];
+    char *path, *p;
+
+    if (dev->sysfs_path == NULL)
+        return FALSE;
+
+    path = malloc(strlen(dev->sysfs_path) + strlen("/sys") + strlen("/removable") + 1);
+    path[0] = 0;
+
+    if (strncmp(dev->sysfs_path, "/sys", 4) != 0)
+        strcpy(path, "/sys");
+
+    strcat(path, dev->sysfs_path);
+
+    while ((p = strrchr(path, '/'))) {
+        FILE *f;
+
+        strcpy(p, "/removable");
+        f = fopen(path, "r");
+        *p = 0;
+
+        if (f) {
+            if (fgets(buffer, 10, f)) {
+                if (strcmp(buffer, "fixed") != 0) {
+                    /* It's a potentially removable device, so treat it as a container */
+                    fclose(f);
+                    break;
+                }
+            }
+            fclose(f);
+        }
+    }
+
+    /* Get just the USB bus-devpath part */
+    p = strrchr(path, '/');
+    if (p && (p - path) > 12) {
+        char *guid = (char*) &params->uuid;
+        memset(&params->uuid, 0, sizeof(GUID));
+        params->uuid.Data1 = (dev->vendor_id << 16) | dev->product_id;
+
+        for (int i = 0; p[i]; i++) {
+          guid[4 + i % 12] ^= p[i];
+        }
+
+        params->vt = VT_CLSID;
+
+        free(path);
+        return TRUE;
+    }
+
+    free(path);
+    return FALSE;
+}
+
 static NTSTATUS pulse_get_prop_value(void *args)
 {
     static const GUID PKEY_AudioEndpoint_GUID = {
@@ -2344,6 +2402,10 @@ static NTSTATUS pulse_get_prop_value(void *args)
             continue;
         if (IsEqualPropertyKey(*params->prop, devicepath_key)) {
             if (!get_device_path(dev, params))
+                break;
+            return STATUS_SUCCESS;
+        } else if (IsEqualPropertyKey(*params->prop, DEVPKEY_Device_ContainerId)) {
+            if (!get_device_container(dev, params))
                 break;
             return STATUS_SUCCESS;
         } else if (IsEqualGUID(&params->prop->fmtid, &PKEY_AudioEndpoint_GUID)) {

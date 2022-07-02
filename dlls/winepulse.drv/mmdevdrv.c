@@ -2730,6 +2730,11 @@ HRESULT WINAPI AUDDRV_GetPropValue(GUID *guid, const PROPERTYKEY *prop, PROPVARI
             return E_OUTOFMEMORY;
         memcpy(out->pwszVal, params.wstr, size);
         break;
+    case VT_CLSID:
+        if (!(out->puuid = CoTaskMemAlloc(sizeof(GUID))))
+            return E_OUTOFMEMORY;
+        memcpy(out->puuid, &params.uuid, sizeof(GUID));
+        break;
     case VT_UI4:
         out->ulVal = params.ulVal;
         break;
