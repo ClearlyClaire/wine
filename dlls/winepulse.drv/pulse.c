@@ -1066,6 +1066,29 @@ static HRESULT pulse_stream_connect(struct pulse_stream *stream, const char *pul
     return S_OK;
 }
 
+static HRESULT get_device_period_helper(EDataFlow flow, const char *pulse_name, REFERENCE_TIME *def, REFERENCE_TIME *min)
+{
+    struct list *list = (flow == eRender) ? &g_phys_speakers : &g_phys_sources;
+    PhysDevice *dev;
+
+    if (!def && !min) {
+        return E_POINTER;
+    }
+
+    LIST_FOR_EACH_ENTRY(dev, list, PhysDevice, entry) {
+        if (strcmp(pulse_name, dev->pulse_name))
+            continue;
+
+        if (def)
+            *def = dev->def_period;
+        if (min)
+            *min = dev->min_period;
+        return S_OK;
+    }
+
+    return E_FAIL;
+}
+
 static NTSTATUS pulse_create_stream(void *args)
 {
     struct create_stream_params *params = args;
@@ -2043,6 +2066,14 @@ static NTSTATUS pulse_get_mix_format(void *args)
     return STATUS_SUCCESS;
 }
 
+static NTSTATUS pulse_get_device_period(void *args)
+{
+    struct get_device_period_params *params = args;
+
+    params->result = get_device_period_helper(params->flow, params->pulse_name, params->def_period, params->min_period);
+    return STATUS_SUCCESS;
+}
+
 static NTSTATUS pulse_get_buffer_size(void *args)
 {
     struct get_buffer_size_params *params = args;
@@ -2357,6 +2388,7 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
     pulse_get_capture_buffer,
     pulse_release_capture_buffer,
     pulse_get_mix_format,
+    pulse_get_device_period,
     pulse_get_buffer_size,
     pulse_get_latency,
     pulse_get_current_padding,
