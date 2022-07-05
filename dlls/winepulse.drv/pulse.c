@@ -2023,6 +2023,26 @@ static NTSTATUS pulse_release_capture_buffer(void *args)
     return STATUS_SUCCESS;
 }
 
+static NTSTATUS pulse_get_mix_format(void *args)
+{
+    struct get_mix_format_params *params = args;
+    struct list *list = (params->flow == eRender) ? &g_phys_speakers : &g_phys_sources;
+    PhysDevice *dev;
+
+    LIST_FOR_EACH_ENTRY(dev, list, PhysDevice, entry) {
+        if (strcmp(params->pulse_name, dev->pulse_name))
+            continue;
+
+        *params->fmt = dev->fmt;
+        params->result = S_OK;
+
+        return STATUS_SUCCESS;
+    }
+
+    params->result = E_FAIL;
+    return STATUS_SUCCESS;
+}
+
 static NTSTATUS pulse_get_buffer_size(void *args)
 {
     struct get_buffer_size_params *params = args;
@@ -2336,6 +2356,7 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
     pulse_release_render_buffer,
     pulse_get_capture_buffer,
     pulse_release_capture_buffer,
+    pulse_get_mix_format,
     pulse_get_buffer_size,
     pulse_get_latency,
     pulse_get_current_padding,
