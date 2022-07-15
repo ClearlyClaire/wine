@@ -191,6 +191,21 @@ static HRESULT MMDevice_GetPropValue(const GUID *devguid, DWORD flow, REFPROPERT
             break;
     }
     RegCloseKey(regkey);
+
+    /* Special case ContainerID as CLSID */
+    if(pv->vt == VT_BLOB && pv->blob.pBlobData && pv->blob.cbSize == 24 && pv->blob.pBlobData[0] == VT_CLSID && IsEqualPropertyKey(*key, DEVPKEY_Device_ContainerId)) {
+        GUID *guid = CoTaskMemAlloc(sizeof(GUID));
+        if (!guid) {
+            PropVariantClear(pv);
+            hr = E_OUTOFMEMORY;
+        } else {
+            memcpy(guid, pv->blob.pBlobData + 8, sizeof(GUID));
+            CoTaskMemFree(pv->blob.pBlobData);
+            pv->vt = VT_CLSID;
+            pv->puuid = guid;
+        }
+    }
+
     return hr;
 }
 
