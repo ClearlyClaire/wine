@@ -421,6 +421,8 @@ static MMDevice *MMDevice_Create(const WCHAR *name, GUID *id, EDataFlow flow, DW
             MMDevice_SetPropValue(id, flow, (const PROPERTYKEY*)&DEVPKEY_DeviceInterface_FriendlyName, &pv);
             MMDevice_SetPropValue(id, flow, (const PROPERTYKEY*)&DEVPKEY_Device_DeviceDesc, &pv);
 
+            set_driver_prop_value(id, flow, (const PROPERTYKEY*)&DEVPKEY_Device_ContainerId);
+
             pv.pwszVal = guidstr;
             MMDevice_SetPropValue(id, flow, &deviceinterface_key, &pv);
 
