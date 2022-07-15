@@ -227,6 +227,18 @@ static HRESULT MMDevice_SetPropValue(const GUID *devguid, DWORD flow, REFPROPERT
             ret = RegSetValueExW(regkey, buffer, 0, REG_SZ, (const BYTE*)pv->pwszVal, sizeof(WCHAR)*(1+lstrlenW(pv->pwszVal)));
             break;
         }
+        case VT_CLSID:
+        {
+            if (IsEqualPropertyKey(*key, DEVPKEY_Device_ContainerId)) {
+                BYTE value[24] = { VT_CLSID, 0, 0, 0, 1, 0, 0, 0 };
+                memcpy(value + 8, pv->puuid, sizeof(GUID));
+
+                ret = RegSetValueExW(regkey, buffer, 0, REG_BINARY, (const BYTE*)value, 24);
+                break;
+            }
+            /* If it's not containerId, fall through the default unsupported case as we can't
+               ensure it will be decoded as CLSID. */
+        }
         default:
             ret = 0;
             FIXME("Unhandled type %u\n", pv->vt);
