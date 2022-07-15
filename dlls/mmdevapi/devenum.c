@@ -209,6 +209,26 @@ static HRESULT MMDevice_GetPropValue(const GUID *devguid, DWORD flow, REFPROPERT
     return hr;
 }
 
+static HRESULT MMDevice_DeletePropValue(const GUID *devguid, DWORD flow, REFPROPERTYKEY key)
+{
+    WCHAR buffer[80];
+    const GUID *id = &key->fmtid;
+    HRESULT hr;
+    HKEY regkey;
+    LONG ret;
+
+    hr = MMDevPropStore_OpenPropKey(devguid, flow, &regkey);
+    if (FAILED(hr))
+        return hr;
+    wsprintfW( buffer, propkey_formatW, id->Data1, id->Data2, id->Data3,
+               id->Data4[0], id->Data4[1], id->Data4[2], id->Data4[3],
+               id->Data4[4], id->Data4[5], id->Data4[6], id->Data4[7], key->pid );
+    ret = RegDeleteValueW(regkey, buffer);
+    RegCloseKey(regkey);
+    TRACE("Deleting %s returned %lu\n", debugstr_w(buffer), ret);
+    return hr;
+}
+
 static HRESULT MMDevice_SetPropValue(const GUID *devguid, DWORD flow, REFPROPERTYKEY key, REFPROPVARIANT pv)
 {
     WCHAR buffer[80];
@@ -421,7 +441,14 @@ static MMDevice *MMDevice_Create(const WCHAR *name, GUID *id, EDataFlow flow, DW
             MMDevice_SetPropValue(id, flow, (const PROPERTYKEY*)&DEVPKEY_DeviceInterface_FriendlyName, &pv);
             MMDevice_SetPropValue(id, flow, (const PROPERTYKEY*)&DEVPKEY_Device_DeviceDesc, &pv);
 
-            set_driver_prop_value(id, flow, (const PROPERTYKEY*)&DEVPKEY_Device_ContainerId);
+            /* The mechanism we use to attribute Container IDs is not very robust and could end up making
+               an active device share a ContainerID with inactive devices, and some games enumerate even
+               inactive devices, stopping at the first matching one.
+               To avoid issues, invalidate the ContainerID of devices that are not present. */
+            if (state & DEVICE_STATE_ACTIVE)
+                set_driver_prop_value(id, flow, (const PROPERTYKEY*)&DEVPKEY_Device_ContainerId);
+            else if (state & DEVICE_STATE_NOTPRESENT)
+                MMDevice_DeletePropValue(id, flow, (const PROPERTYKEY*)&DEVPKEY_Device_ContainerId);
 
             pv.pwszVal = guidstr;
             MMDevice_SetPropValue(id, flow, &deviceinterface_key, &pv);
