@@ -1543,6 +1543,36 @@ static const struct hid_device_vtbl lnxev_device_vtbl =
 };
 #endif /* HAS_PROPER_INPUT_HEADER */
 
+static void get_device_container_syspath(const char *syspath, struct device_desc *desc)
+{
+    char path[MAX_PATH], buffer[10], *p;
+
+    if (strlen(syspath) + strlen("/removable") + 1 > MAX_PATH)
+        return;
+
+    strcpy(path, syspath);
+
+    while ((p = strrchr(path, '/'))) {
+        FILE *f;
+
+        strcpy(p, "/removable");
+        f = fopen(path, "r");
+        *p = 0;
+
+        if (f) {
+            if (fgets(buffer, 10, f) && strcmp(buffer, "fixed") != 0) {
+                /* It's a potentially removable device, so treat it as a container */
+                fclose(f);
+                break;
+            }
+            fclose(f);
+        }
+    }
+
+    if (p && (p - path) > 12)
+        lstrcpynA(desc->container_syspath, path, sizeof(desc->container_syspath));
+}
+
 static void get_device_subsystem_info(struct udev_device *dev, char const *subsystem, struct device_desc *desc,
                                       int *bus)
 {
@@ -1601,6 +1631,10 @@ static void get_device_subsystem_info(struct udev_device *dev, char const *subsy
 
     if (!desc->serialnumber[0] && (tmp = udev_device_get_sysattr_value(dev, "serial")))
         ntdll_umbstowcs(tmp, strlen(tmp) + 1, desc->serialnumber, ARRAY_SIZE(desc->serialnumber));
+
+    if (!desc->container_syspath[0] && (tmp = udev_device_get_syspath(dev))) {
+        get_device_container_syspath(tmp, desc);
+    }
 }
 
 static void hidraw_set_quirks(struct hidraw_device *impl, DWORD bus_type, WORD vid, WORD pid)
