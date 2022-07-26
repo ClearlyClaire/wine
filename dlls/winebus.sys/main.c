@@ -37,6 +37,7 @@
 #include "wine/debug.h"
 #include "wine/list.h"
 #include "wine/unixlib.h"
+#include "ole2.h"
 
 #include "unixlib.h"
 
@@ -195,6 +196,36 @@ static WCHAR *get_instance_id(DEVICE_OBJECT *device)
                  ext->desc.uid, ext->index, ext->desc.is_gamepad);
     }
 
+    return dst;
+}
+
+static WCHAR *get_container_id(DEVICE_OBJECT *device)
+{
+    struct device_extension *ext = (struct device_extension *)device->DeviceExtension;
+    UINT len = (38+1)*sizeof(WCHAR);
+    WCHAR *dst;
+    GUID guid;
+    const char *p;
+
+    if (!ext->desc.container_syspath[0])
+        return NULL;
+
+    memset(&guid, 0, sizeof(GUID));
+    guid.Data1 = (ext->desc.vid << 16) | ext->desc.pid;
+
+    /* Get just the USB bus-devpath part */
+    p = strrchr(ext->desc.container_syspath, '/');
+    if (!p || (p - ext->desc.container_syspath) <= 12)
+        return NULL;
+
+    for (int i = 0; p[i]; i++) {
+      ((char *) &guid)[4 + i % 12] ^= p[i];
+    }
+
+    if (!(dst = ExAllocatePool(PagedPool, len)))
+        return NULL;
+
+    StringFromGUID2(&guid, dst, len);
     return dst;
 }
 
@@ -521,6 +552,10 @@ static NTSTATUS handle_IRP_MN_QUERY_ID(DEVICE_OBJECT *device, IRP *irp)
         case BusQueryInstanceID:
             TRACE("BusQueryInstanceID\n");
             irp->IoStatus.Information = (ULONG_PTR)get_instance_id(device);
+            break;
+        case BusQueryContainerID:
+            TRACE("BusQueryContainerID\n");
+            irp->IoStatus.Information = (ULONG_PTR)get_container_id(device);
             break;
         default:
             FIXME("Unhandled type %08x\n", type);
