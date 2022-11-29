@@ -3050,6 +3050,55 @@ BOOL WINAPI SetupDiDestroyDeviceInfoList(HDEVINFO devinfo)
 }
 
 /***********************************************************************
+ *              SetupDiGetDeviceInterfacePropertyW (SETUPAPI.@)
+ */
+BOOL WINAPI SetupDiGetDeviceInterfacePropertyW(HDEVINFO devinfo, SP_DEVICE_INTERFACE_DATA *iface_data,
+                const DEVPROPKEY *prop_key, DEVPROPTYPE *prop_type, BYTE *prop_buff,
+                DWORD prop_buff_size, DWORD *required_size, DWORD flags) {
+
+    // TODO: should probably use DEVPKEY_Device_InstanceId
+    static const DEVPROPKEY device_instanceid_key = {
+        {0x78c34fc8, 0x104a, 0x4aca, {0x9e, 0xa4, 0x52, 0x4d, 0x52, 0x99, 0x6e, 0x57}}, 256
+    };
+
+    TRACE("%p, %p, (%s, %04lx), %p, %p, %ld, %p, %#lx\n", devinfo, iface_data, wine_dbgstr_guid(&prop_key->fmtid), prop_key->pid, prop_type, prop_buff, prop_buff_size,
+          required_size, flags);
+
+    // Special case for InstanceID
+    if (IsEqualDevPropKey(*prop_key, device_instanceid_key)) {
+        struct device *device;
+        struct device_iface *iface;
+
+        if (!(iface = get_device_iface(devinfo, iface_data)))
+            return FALSE;
+
+        if (!(device = iface->device))
+            return FALSE;
+
+        TRACE("instance ID: %s\n", debugstr_w(device->instanceId));
+        if (prop_buff_size < lstrlenW(device->instanceId) + 1)
+        {
+            SetLastError(ERROR_INSUFFICIENT_BUFFER);
+            if (required_size)
+                *required_size = lstrlenW(device->instanceId) + 1;
+            return FALSE;
+        }
+
+        lstrcpyW((WCHAR *) prop_buff, device->instanceId);
+        if (required_size)
+            *required_size = lstrlenW(device->instanceId) + 1;
+        *prop_type = DEVPROP_TYPE_STRING;
+
+        return TRUE;
+    } else {
+        // TODO: maybe fall back as SetupDiGetDevicePropertyW?
+        FIXME("stub\n");
+    }
+
+    return FALSE;
+}
+
+/***********************************************************************
  *		SetupDiGetDeviceInterfaceDetailA (SETUPAPI.@)
  */
 BOOL WINAPI SetupDiGetDeviceInterfaceDetailA(HDEVINFO devinfo, SP_DEVICE_INTERFACE_DATA *iface_data,
